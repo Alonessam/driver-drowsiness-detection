@@ -1,9 +1,10 @@
-"""Walks through the work package 2 test videos for labeling and shows the label status.
+"""Walks through the test videos for labeling and shows the label status.
 
 Usage:
-    python tools/test_videos.py label          # opens unlabeled videos one by one (labeled ones are skipped)
-    python tools/test_videos.py label --all    # also reopens labeled ones (continues the previous marks)
-    python tools/test_videos.py status         # which video has how many blinks labeled
+    python tools/test_videos.py label                  # blink test videos (work package 2), unlabeled ones one by one
+    python tools/test_videos.py label --kind yawn      # yawn test videos (work package 3)
+    python tools/test_videos.py label --all            # also reopens labeled ones (continues the previous marks)
+    python tools/test_videos.py status [--kind yawn]   # which video has how many events labeled
 """
 import argparse
 import subprocess
@@ -14,50 +15,56 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from drowsiness.eye_evaluation import read_labels  # noqa: E402
 from drowsiness.paths import ROOT, resolve_video  # noqa: E402
 
-LIST = ROOT / "labels" / "test_videos.txt"
-LABELER = ROOT / "tools" / "label_blinks.py"
+LABELER = ROOT / "tools" / "label_events.py"
+KINDS = {
+    "blink": {"list": ROOT / "labels" / "test_videos.txt", "folder": ROOT / "labels",
+              "key": "blink_times_s", "noun": "blink", "hint": "Press B at every blink."},
+    "yawn": {"list": ROOT / "labels" / "yawn_test_videos.txt", "folder": ROOT / "labels" / "yawn",
+             "key": "yawn_times_s", "noun": "yawn", "hint": "Press B once in the middle of every yawn."},
+}
 
 
-def videos():
-    return [resolve_video(s.strip()) for s in LIST.read_text(encoding="utf-8").splitlines() if s.strip()]
+def videos(kind):
+    return [resolve_video(s.strip()) for s in kind["list"].read_text(encoding="utf-8").splitlines() if s.strip()]
 
 
-def label_path(video):
-    return ROOT / "labels" / f"{video.stem}.json"
+def label_path(kind, video):
+    return kind["folder"] / f"{video.stem}.json"
 
 
-def print_status():
+def print_status(kind):
     done = 0
-    for i, v in enumerate(videos(), 1):
-        path = label_path(v)
+    for i, v in enumerate(videos(kind), 1):
+        path = label_path(kind, v)
         if path.exists():
-            _, times = read_labels(path)
+            _, times = read_labels(path, kind["key"])
             done += 1
-            print(f"{i}. [x] {v.name}: {len(times)} blinks marked")
+            print(f"{i}. [x] {v.name}: {len(times)} {kind['noun']}s marked")
         else:
             print(f"{i}. [ ] {v.name}: not labeled yet")
-    print(f"\nLabeled videos: {done}/{len(videos())}")
+    print(f"\nLabeled videos: {done}/{len(videos(kind))}")
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     ap.add_argument("command", choices=["label", "status"])
+    ap.add_argument("--kind", choices=KINDS, default="blink")
     ap.add_argument("--all", action="store_true")
-    ap.add_argument("--speed", default="0.25")
     args = ap.parse_args()
+    kind = KINDS[args.kind]
 
     if args.command == "status":
-        print_status()
+        print_status(kind)
         return
-    for i, v in enumerate(videos(), 1):
-        if label_path(v).exists() and not args.all:
+    for i, v in enumerate(videos(kind), 1):
+        if label_path(kind, v).exists() and not args.all:
             print(f"{i}. {v.name}: already labeled, skipped")
             continue
-        print(f"\n{i}/{len(videos())}  {v.name}")
-        print("Press B at every blink. Press Q when done to save and open the next video.")
-        subprocess.run([sys.executable, str(LABELER), str(v), "--speed", args.speed], check=False)
+        print(f"\n{i}/{len(videos(kind))}  {v.name}")
+        print(f"{kind['hint']} Press Q when done to save and open the next video.")
+        subprocess.run([sys.executable, str(LABELER), str(v), "--kind", args.kind], check=False)
     print("\nDone.")
-    print_status()
+    print_status(kind)
 
 
 if __name__ == "__main__":

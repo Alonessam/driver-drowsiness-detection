@@ -158,3 +158,14 @@ def test_blink_rate_is_none_early(tracker):
 def test_ear_works_with_numpy_array():
     p = np.array(eye_points(4), dtype=np.float32)
     assert compute_ear(p) == pytest.approx(0.4)
+
+
+def test_short_face_loss_during_a_long_closure_does_not_break_it(tracker):
+    _, events = simulate(tracker, [(1.0, OPEN), (0.8, CLOSED), (0.2, None), (1.0, CLOSED)], t0_s=3.5)
+    assert [e.kind for e in events] == [LONG_CLOSURE]
+
+
+def test_short_face_loss_does_not_inflate_a_blink(tracker):
+    _, events = simulate(tracker, [(1.0, OPEN), (0.2, CLOSED), (0.2, None), (1.0, OPEN)], t0_s=3.5)
+    assert [e.kind for e in events] == [BLINK]
+    assert events[0].duration_ms < 400

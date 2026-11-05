@@ -57,6 +57,7 @@ def main():
     state = "calibration"   # calibration -> wait -> close -> (next trial) -> done
     trial_no, next_command_s, command_start_s = 0, None, None
     caught = False
+    min_ear, face_lost_frames, max_closed_s = None, 0, 0.0   # diagnostics of the current trial
     false_alarms = 0
     message = ""
     end_s = None
@@ -73,6 +74,13 @@ def main():
             history.append((t, ear))
             long_closure = any(e.kind == LONG_CLOSURE for e in events)
 
+            if state in ("close", "evaluate"):
+                if ear is None:
+                    face_lost_frames += 1
+                else:
+                    min_ear = ear if min_ear is None else min(min_ear, ear)
+                max_closed_s = max(max_closed_s, eyes.closed_duration_s(timestamp_ms))
+
             if state == "calibration":
                 message = f"CALIBRATION: look at the camera, eyes OPEN ({eyes.remaining_s:.0f} s)"
                 if eyes.is_calibrated:
@@ -84,6 +92,7 @@ def main():
                     false_alarms += 1   # long closure seen without a command
                 if t >= next_command_s:
                     state, command_start_s, caught = "close", t, False
+                    min_ear, face_lost_frames, max_closed_s = None, 0, 0.0
                     beep(880, 250)
             elif state == "close":
                 remaining = args.duration - (t - command_start_s)
@@ -98,8 +107,12 @@ def main():
                 message = "OPEN! (computing result)"
                 caught = caught or long_closure
                 if t - evaluate_start_s >= 1.0:
-                    results.append((trial_no, round(command_start_s, 2), caught))
+                    results.append((trial_no, round(command_start_s, 2), caught, min_ear, face_lost_frames,
+                                    round(max_closed_s, 2), eyes.threshold))
                     message = f"Trial {trial_no}: {'CAUGHT' if caught else 'MISSED'}"
+                    print(f"Trial {trial_no}: {'caught' if caught else 'MISSED'} | lowest EAR "
+                          f"{'-' if min_ear is None else f'{min_ear:.2f}'} (threshold {eyes.threshold:.2f}) | "
+                          f"frames without face {face_lost_frames} | longest closed {max_closed_s:.1f} s", flush=True)
                     if trial_no >= args.trials:
                         state, end_s = "done", t
                     else:
@@ -134,10 +147,12 @@ def main():
     with open(args.output, "a", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f)
         if is_new:
-            w.writerow(["date", "trial", "command_duration_s", "caught"])
+            w.writerow(["date", "trial", "command_duration_s", "caught", "lowest_ear", "threshold",
+                        "frames_without_face", "longest_closed_s"])
         stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        for no, _, c in results:
-            w.writerow([stamp, no, args.duration, "yes" if c else "no"])
+        for no, _, c, low, lost, longest, threshold in results:
+            w.writerow([stamp, no, args.duration, "yes" if c else "no",
+                        "" if low is None else round(low, 3), round(threshold, 3), lost, longest])
     print(f"Results appended: {args.output} (no image was saved)")
 
 

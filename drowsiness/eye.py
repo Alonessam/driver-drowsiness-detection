@@ -53,16 +53,20 @@ class EyeTracker:
     long_closure_s: If the eyes stay closed longer than this, a "long eye closure (microsleep)" event is
                    emitted (while the eyes are still closed, at the moment the time is reached).
     Closures longer than a blink but shorter than a long closure count as a "long blink" (slow blink).
+    face_loss_tolerance_s: If the face is lost for less than this while the eyes are closed, the closure
+                    continues (closed eyes can briefly confuse the face detector); a longer loss discards it.
     """
 
     def __init__(self, calibration_s=3.0, threshold_ratio=0.72, threshold_min=0.10, threshold_max=0.28,
-                 blink_min_s=0.10, blink_max_s=0.40, long_closure_s=1.5, min_samples=10):
+                 blink_min_s=0.10, blink_max_s=0.40, long_closure_s=1.5, min_samples=10,
+                 face_loss_tolerance_s=0.3):
         self.calibration_s = calibration_s
         self.threshold_ratio = threshold_ratio
         self.threshold_min, self.threshold_max = threshold_min, threshold_max
         self.blink_min_s, self.blink_max_s = blink_min_s, blink_max_s
         self.long_closure_s = long_closure_s
         self.min_samples = min_samples
+        self.face_loss_tolerance_s = face_loss_tolerance_s
         self.reset_calibration()
 
     def reset_calibration(self):
@@ -79,6 +83,9 @@ class EyeTracker:
         self._calibration_start_ms = None
         self._closed_start_ms = None
         self._long_reported = False
+        self._last_seen_ms = None
+        self._last_closed_ms = None
+        self._gap_seen = False
         self.monitoring_start_ms = None
 
     @property
@@ -106,10 +113,16 @@ class EyeTracker:
         """Processes one frame. ear: EAR of that frame, or None if there is no face. Returns the new events."""
         self.last_ear = ear
         if ear is None:
-            # Face lost: a half-finished closure is unreliable, drop it without counting
+            # Face lost: a short loss does not end a closure; a longer one makes it unreliable, so it is dropped
+            if self._closed_start_ms is not None and self._last_seen_ms is not None \
+                    and (timestamp_ms - self._last_seen_ms) / 1000.0 <= self.face_loss_tolerance_s:
+                self._gap_seen = True
+                return []
             self._closed_start_ms = None
             self._long_reported = False
+            self._gap_seen = False
             return []
+        self._last_seen_ms = timestamp_ms
         if not self.is_calibrated:
             self._calibration_step(timestamp_ms, ear)
             return []
@@ -119,13 +132,17 @@ class EyeTracker:
             if self._closed_start_ms is None:
                 self._closed_start_ms = timestamp_ms
                 self._long_reported = False
+                self._gap_seen = False
+            self._last_closed_ms = timestamp_ms
             elapsed = (timestamp_ms - self._closed_start_ms) / 1000.0
             if elapsed + TOLERANCE_S >= self.long_closure_s and not self._long_reported:
                 self._long_reported = True
                 self.long_closure_count += 1
                 new_events.append(EyeEvent(LONG_CLOSURE, self._closed_start_ms, elapsed * 1000))
         elif self._closed_start_ms is not None:  # eyes just opened
-            duration = (timestamp_ms - self._closed_start_ms) / 1000.0
+            # after a face-loss gap the closure is measured up to the last frame seen closed
+            end_ms = self._last_closed_ms if self._gap_seen else timestamp_ms
+            duration = (end_ms - self._closed_start_ms) / 1000.0
             if not self._long_reported:  # a long closure was already reported, do not count it again
                 if self.blink_min_s - TOLERANCE_S <= duration <= self.blink_max_s + TOLERANCE_S:
                     self.blink_count += 1
@@ -135,6 +152,7 @@ class EyeTracker:
                     new_events.append(EyeEvent(LONG_BLINK, self._closed_start_ms, duration * 1000))
             self._closed_start_ms = None
             self._long_reported = False
+            self._gap_seen = False
         self.events.extend(new_events)
         return new_events
 

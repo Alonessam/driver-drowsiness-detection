@@ -1,4 +1,4 @@
-"""Live demo: shows face landmarks from a camera or a video file.
+"""Live demo: shows face landmarks, blinks and yawns from a camera or a video file.
 
 Usage:
     python app.py                           # default camera
@@ -11,8 +11,12 @@ automatically start in privacy mode.
 
 Eye tracking: the first 3 seconds are calibration (look at the camera, eyes open); after that blinks and
 long eye closures are counted, and the EAR and a graph of the last 10 seconds are shown on screen.
+Yawn tracking: a wide-open mouth (MAR above the threshold) for at least 1 second counts as a yawn.
+Sunglasses hide the eyes, so eye tracking is switched off for them (automatically for YawDD file names
+containing "SunGlasses", or with the s key / --sunglasses); yawn tracking keeps working.
 
-Keys: g = toggle privacy mode, r = recalibrate, q or ESC = quit
+Keys: g = toggle privacy mode, r = recalibrate and reset counters, s = toggle sunglasses mode,
+      q or ESC = quit
 """
 import argparse
 import time
@@ -22,9 +26,11 @@ from pathlib import Path
 import cv2
 
 from drowsiness.consent import image_sharing_permission
-from drowsiness.drawing import draw, draw_ear_graph, fit_to_screen, put_info, put_warning
+from drowsiness.drawing import (draw, draw_ear_graph, draw_mar_graph, fit_to_screen, put_info,
+                                put_warning)
 from drowsiness.eye import EyeTracker, mean_ear
 from drowsiness.landmarks import FaceLandmarkDetector, to_pixels
+from drowsiness.mouth import YawnTracker, mouth_mar
 from drowsiness.paths import YAWDD_DIR
 from drowsiness.source import VideoSource
 
@@ -60,6 +66,7 @@ def main():
     ap.add_argument("--source", default="0", help="camera index or video path (default: 0)")
     ap.add_argument("--pick", action="store_true", help="choose a video with a file dialog")
     ap.add_argument("--privacy", action="store_true", help="start with privacy mode on")
+    ap.add_argument("--sunglasses", action="store_true", help="start with eye tracking off (sunglasses)")
     args = ap.parse_args()
 
     if args.pick:
@@ -72,20 +79,27 @@ def main():
     # For videos, privacy mode starts on unless the image sharing permission is "yes"
     permission = image_sharing_permission(source_path) if isinstance(source_path, str) else None
     privacy = args.privacy or (permission is not None and permission != "yes")
+    sunglasses = args.sunglasses or (isinstance(source_path, str) and "sunglasses" in Path(source_path).name.lower())
     fps = 0.0
     first_frame = True
     eyes = EyeTracker()
-    history = deque(maxlen=3000)  # (time_s, ear) pairs for the graph
+    yawns = YawnTracker()
+    ear_history = deque(maxlen=3000)  # (time_s, ear) pairs for the graph
+    mar_history = deque(maxlen=3000)  # (time_s, mar) pairs for the graph
     with VideoSource(source_path) as source, FaceLandmarkDetector() as detector:
         for _, timestamp_ms, frame in source.frames():
             t0 = time.perf_counter()
             landmarks = detector.detect(frame, timestamp_ms)
-            ear = None
+            ear = mar = None
             if landmarks is not None:
                 height, width = frame.shape[:2]
-                ear = mean_ear(to_pixels(landmarks, width, height))
-            eyes.update(timestamp_ms, ear)
-            history.append((timestamp_ms / 1000.0, ear))
+                points = to_pixels(landmarks, width, height)
+                ear, mar = mean_ear(points), mouth_mar(points)
+            if not sunglasses:
+                eyes.update(timestamp_ms, ear)
+            yawns.update(timestamp_ms, mar)
+            ear_history.append((timestamp_ms / 1000.0, None if sunglasses else ear))
+            mar_history.append((timestamp_ms / 1000.0, mar))
             output = fit_to_screen(draw(frame, landmarks, privacy))
             elapsed = time.perf_counter() - t0
             fps = 0.9 * fps + 0.1 / elapsed if fps else 1.0 / elapsed
@@ -94,7 +108,9 @@ def main():
                 f"Privacy mode: {'ON' if privacy else 'off'} (g)",
                 f"Processing speed: {fps:.0f} fps",
             ]
-            if not eyes.is_calibrated:
+            if sunglasses:
+                lines.append("Eyes: OFF (sunglasses mode, s)")
+            elif not eyes.is_calibrated:
                 lines.append(f"CALIBRATION: look at the camera, eyes open ({eyes.remaining_s:.0f} s)")
             else:
                 lines.append(f"EAR: {'-' if ear is None else f'{ear:.2f}'}  (threshold {eyes.threshold:.2f})")
@@ -102,13 +118,23 @@ def main():
                              f"{f'  ({eyes.closed_duration_s(timestamp_ms):.1f} s)' if eyes.is_closed else ''}")
                 lines.append(f"Blinks: {eyes.blink_count}   Slow blinks: {eyes.long_blink_count}"
                              f"   Long closures: {eyes.long_closure_count}")
+            lines.append(f"MAR: {'-' if mar is None else f'{mar:.2f}'}  (open {yawns.mar_threshold:.2f}, yawn {yawns.peak_threshold:.2f})")
+            lines.append(f"Mouth: {'WIDE OPEN' if yawns.is_open else 'closed'}"
+                         f"{f'  ({yawns.open_duration_s(timestamp_ms):.1f} s)' if yawns.is_open else ''}")
+            lines.append(f"Yawns: {yawns.yawn_count}   (last 5 min: {yawns.recent_yawns(timestamp_ms)})")
             if permission is not None:
                 lines.append(f"Image sharing permission: {permission}")
-            lines.append("g: privacy | r: recalibrate | q/ESC/X: quit")
+            lines.append("g: privacy | r: recalibrate | s: sunglasses | q/ESC/X: quit")
             put_info(output, lines)
-            draw_ear_graph(output, history, eyes.threshold)
-            if eyes.closed_duration_s(timestamp_ms) >= eyes.long_closure_s:
-                put_warning(output, "LONG EYE CLOSURE!")
+            if not sunglasses:
+                draw_ear_graph(output, ear_history, eyes.threshold)
+            draw_mar_graph(output, mar_history, yawns.mar_threshold)
+            row = 0
+            if not sunglasses and eyes.closed_duration_s(timestamp_ms) >= eyes.long_closure_s:
+                put_warning(output, "LONG EYE CLOSURE!", row)
+                row += 1
+            if yawns.is_open and yawns.open_duration_s(timestamp_ms) >= yawns.min_duration_s:
+                put_warning(output, "YAWN DETECTED!", row)
             cv2.imshow(WINDOW, output)
             if first_frame:  # bring the window to the front (the q key goes to the focused window)
                 cv2.setWindowProperty(WINDOW, cv2.WND_PROP_TOPMOST, 1)
@@ -122,9 +148,15 @@ def main():
                 break
             if key == ord("g"):
                 privacy = not privacy
+            if key == ord("s"):
+                sunglasses = not sunglasses
+                eyes.reset_calibration()
+                ear_history.clear()
             if key == ord("r"):
                 eyes.reset_calibration()
-                history.clear()
+                yawns.reset()
+                ear_history.clear()
+                mar_history.clear()
     cv2.destroyAllWindows()
 
 

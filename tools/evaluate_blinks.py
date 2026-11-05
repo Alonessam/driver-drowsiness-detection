@@ -4,7 +4,7 @@ Usage:
     python tools/evaluate_blinks.py                       # all labels/*.json files
     python tools/evaluate_blinks.py labels/name.json ...  # specific label files
 
-Every label file is created with tools/label_blinks.py and contains the video it belongs to.
+Every label file is created with tools/label_events.py and contains the video it belongs to.
 Blinks made during calibration (first ~3 s) cannot be counted, so they are left out of the evaluation.
 """
 import argparse
@@ -29,7 +29,7 @@ def main():
 
     files = args.labels or sorted((ROOT / "labels").glob("*.json"))
     if not files:
-        raise SystemExit("No label files. Label the videos first with tools/label_blinks.py.")
+        raise SystemExit("No label files. Label the videos first with tools/label_events.py.")
 
     rows = []
     totals = [0, 0, 0]

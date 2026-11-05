@@ -74,11 +74,21 @@ def draw_ear_graph(canvas, history, threshold, window_s=10.0, width=260, height=
 
     history: (time_s, ear) pairs; ear is None for frames without a face (the line is broken there).
     """
+    draw_graph(canvas, history, threshold, "EAR (last 10 s)", ear_max, 10, window_s, width, height)
+
+
+def draw_mar_graph(canvas, history, threshold, window_s=10.0, width=260, height=90, mar_max=1.2):
+    """Draws the MAR graph of the last `window_s` seconds next to the EAR graph (red dashed line: threshold)."""
+    draw_graph(canvas, history, threshold, "MAR (last 10 s)", mar_max, 10 + width + 10, window_s, width, height)
+
+
+def draw_graph(canvas, history, threshold, title, value_max, x0, window_s=10.0, width=260, height=90):
+    """Draws a (time_s, value) graph in the bottom-left area, starting at horizontal position x0."""
     canvas_height = canvas.shape[0]
-    x0, y0 = 10, canvas_height - height - 10
+    y0 = canvas_height - height - 10
     cv2.rectangle(canvas, (x0, y0), (x0 + width, y0 + height), (30, 30, 30), -1)
     cv2.rectangle(canvas, (x0, y0), (x0 + width, y0 + height), (120, 120, 120), 1)
-    cv2.putText(canvas, "EAR (last 10 s)", (x0 + 5, y0 + 13), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1, cv2.LINE_AA)
+    cv2.putText(canvas, title, (x0 + 5, y0 + 13), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (200, 200, 200), 1, cv2.LINE_AA)
     if not history:
         return
     t_last = history[-1][0]
@@ -86,7 +96,7 @@ def draw_ear_graph(canvas, history, threshold, window_s=10.0, width=260, height=
 
     def point(t, e):
         x = x0 + int((t - t_first) / window_s * width)
-        y = y0 + height - int(min(max(e, 0.0), ear_max) / ear_max * height)
+        y = y0 + height - int(min(max(e, 0.0), value_max) / value_max * height)
         return x, y
 
     if threshold is not None:
@@ -107,10 +117,11 @@ def draw_ear_graph(canvas, history, threshold, window_s=10.0, width=260, height=
         cv2.polylines(canvas, [np.array(segment, np.int32)], False, GREEN, 1, cv2.LINE_AA)
 
 
-def put_warning(canvas, text):
-    """Draws a red warning banner at the top center of the image."""
+def put_warning(canvas, text, row=0):
+    """Draws a red warning banner at the top center of the image (row 1 is drawn below row 0)."""
     height, width = canvas.shape[:2]
     (w, h), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, 0.9, 2)
+    top = 8 + row * (h + 28)
     x0 = max(0, (width - w) // 2 - 12)
-    cv2.rectangle(canvas, (x0, 8), (min(width, x0 + w + 24), 8 + h + 20), (30, 30, 200), -1)
-    cv2.putText(canvas, text, (x0 + 12, 8 + h + 8), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2, cv2.LINE_AA)
+    cv2.rectangle(canvas, (x0, top), (min(width, x0 + w + 24), top + h + 20), (30, 30, 200), -1)
+    cv2.putText(canvas, text, (x0 + 12, top + h + 8), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 255), 2, cv2.LINE_AA)

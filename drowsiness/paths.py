@@ -1,10 +1,25 @@
-"""Project paths. The YawDD dataset location can be overridden with the YAWDD_DIR environment variable."""
+"""Project paths.
+
+The YawDD dataset is looked up in this order: the YAWDD_DIR environment variable, `data/YawDD` inside the
+project, a sibling folder named `YawDD dataset` next to the project folder.
+"""
 import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL_PATH = ROOT / "models" / "face_landmarker.task"
-YAWDD_DIR = Path(os.environ.get("YAWDD_DIR", ROOT / "data" / "YawDD"))
+
+
+def _find_yawdd():
+    if os.environ.get("YAWDD_DIR"):
+        return Path(os.environ["YAWDD_DIR"])
+    for candidate in (ROOT / "data" / "YawDD", ROOT.parent / "YawDD dataset"):
+        if candidate.exists():
+            return candidate
+    return ROOT / "data" / "YawDD"
+
+
+YAWDD_DIR = _find_yawdd()
 
 
 def resolve_video(video):

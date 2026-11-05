@@ -1,9 +1,9 @@
 # Driver Drowsiness Detection
 
 A driver drowsiness detection system built with Python, OpenCV and the MediaPipe Face Landmarker.
-It is a single-person project, built in work packages (WP). **Work in progress:** WP1 (face landmarks and privacy mode) and
-WP2 (eye blinks and long eye closures) are implemented; yawning, head pose, PERCLOS, the alarm
-decision logic and the user interface are planned.
+It is a single-person project, built in work packages (WP). **Work in progress:** WP1 (face landmarks and
+privacy mode), WP2 (eye blinks and long eye closures) and WP3 (yawning) are implemented; head pose, PERCLOS,
+the alarm decision logic and the user interface are planned.
 
 ## Features
 
@@ -12,7 +12,10 @@ decision logic and the user interface are planned.
   The application never writes any frame to disk.
 - **Eye tracking (EAR):** 3-second calibration, blink counting, slow-blink counting and a warning for
   eye closures longer than 1.5 s. EAR value, threshold and a 10-second EAR graph are shown live.
-- Tools to measure the face detection rate, label blinks by hand and evaluate blink detection.
+- **Yawn tracking (MAR):** mouth aspect ratio, a yawn counter, the number of yawns in the last 5 minutes and a
+  10-second MAR graph.
+- **Sunglasses mode:** eye tracking is switched off (the eyes are hidden), yawn tracking keeps working.
+- Tools to measure the face detection rate, label blinks and yawns by hand and evaluate both detectors.
 
 ## Setup (Python 3.12 is required; MediaPipe does not support 3.13)
 
@@ -36,17 +39,25 @@ Install `opencv-contrib-python` only (do not also install `opencv-python`; the t
 .\.venv\Scripts\python.exe app.py --source data\YawDD\video.avi     # video file
 .\.venv\Scripts\python.exe app.py --pick                            # choose a video in a file dialog
 .\.venv\Scripts\python.exe app.py --privacy                         # start in privacy mode
+.\.venv\Scripts\python.exe app.py --sunglasses                      # start with eye tracking off
 ```
 
-Keys: `g` toggle privacy mode, `r` recalibrate, `q` / `ESC` / window close button quit.
+Keys: `g` toggle privacy mode, `r` recalibrate and reset counters, `s` toggle sunglasses mode,
+`q` / `ESC` / window close button quit.
 
-During calibration (first 3 s) look at the camera with open eyes. The EAR threshold is the median EAR
-multiplied by 0.72 (limited to 0.10-0.28). A closure of 0.10-0.40 s is a **blink**, 0.40-1.5 s a
-**slow blink**, and an eye closure that reaches **1.5 s** raises a **long eye closure** warning while
-the eyes are still closed. Dips shorter than 0.10 s are treated as noise. If the face is lost, a
-half-finished closure is discarded.
+**Eyes.** During calibration (first 3 s) look at the camera with open eyes. The EAR threshold is the median
+EAR multiplied by 0.72 (limited to 0.10-0.28). A closure of 0.10-0.40 s is a **blink**, 0.40-1.5 s a
+**slow blink**, and an eye closure that reaches **1.5 s** raises a **long eye closure** warning while the eyes
+are still closed. Dips shorter than 0.10 s are treated as noise. A face lost for less than 0.3 s during a
+closure does not end it; a longer loss discards it.
 
-Sunglasses hide the eyes, so eye-based measurements are not reliable with them.
+**Mouth.** MAR = ||p13 - p14|| / ||p78 - p308|| (inner lips over inner mouth corners). The mouth counts as open
+above MAR 0.4; an opening is a **yawn** if it stays open for at least **1 s** and reaches MAR 0.5 at least once.
+Dips shorter than 0.2 s do not end an opening, a face lost for less than 0.5 s neither. The yawn warning appears
+while the mouth is still open.
+
+Sunglasses hide the eyes, so eye-based measurements are not reliable with them. For YawDD files whose name
+contains "SunGlasses" the app switches to sunglasses mode by itself.
 
 `demo.bat` is a small demo menu for Windows (camera, sample videos, results page, file dialog).
 
@@ -59,16 +70,26 @@ Face detection rate and speed on a folder of videos (WP1 targets: >= 90 % and >=
 .\.venv\Scripts\python.exe tools\results_page.py        # HTML summary of the CSV
 ```
 
-Blink detection (WP2 target: >= 85 % of manually counted blinks), using `eye_tests.bat` or directly:
+Blink detection (WP2 targets: >= 85 % of manually counted blinks, >= 90 % of planned closures longer than
+1.5 s), using `eye_tests.bat` or directly:
 
 ```powershell
 .\.venv\Scripts\python.exe tools\test_videos.py label    # label the videos listed in labels\test_videos.txt
 .\.venv\Scripts\python.exe tools\evaluate_blinks.py      # compare detection with the labels (tolerance 0.25 s)
-.\.venv\Scripts\python.exe tools\controlled_test.py      # live test: planned eye closures > 1.5 s (target >= 90 %)
+.\.venv\Scripts\python.exe tools\controlled_test.py      # live test: planned eye closures > 1.5 s
 ```
 
-Label files in `labels/` store video paths relative to the YawDD folder (`data\YawDD` by default, or the
-folder in the `YAWDD_DIR` environment variable).
+Yawn detection (WP3 targets: >= 85 % of manually counted yawns in 5 test videos, at most 1 false yawn per talking
+video), using `yawn_tests.bat` or directly:
+
+```powershell
+.\.venv\Scripts\python.exe tools\pick_test_videos.py                       # picks the 5 test videos (fixed rule and seed)
+.\.venv\Scripts\python.exe tools\test_videos.py label --kind yawn          # label them: B in the middle of each yawn
+.\.venv\Scripts\python.exe tools\evaluate_yawns.py                         # recall on labels + false yawns in talking videos
+```
+
+Label files in `labels/` store video paths relative to the YawDD folder. The folder is found through the
+`YAWDD_DIR` environment variable, `data\YawDD`, or a sibling folder named `YawDD dataset`.
 
 ### Results so far
 
@@ -78,9 +99,21 @@ folder in the `YAWDD_DIR` environment variable).
 | Processing speed | about 84 fps | video reading + detection on CPU, drawing excluded |
 | Blink detection (5 videos, 34 labeled blinks) | 91.2 % recall, 93.9 % precision | 3 missed, 2 false alarms |
 | Controlled long-closure test | not completed yet | |
+| Yawn detection, labeled recall (5 videos) | not measured yet | labeling pending |
+| False yawns, 100 YawDD talking videos | mean 0.06 per video; 99 videos with at most 1, one with 3 | see below |
+| False yawns, 105 YawDD normal videos | 0 | |
 
-The 5 test videos were chosen by a fixed random rule among normal-driving videos with permission to
-share images and without sunglasses; they are small, so these numbers are indicative only.
+### How the yawn thresholds were chosen
+
+MAR series were extracted from all 307 YawDD mirror-camera videos of the classes Yawning (102), Talking (100)
+and Normal (105) and the tracker was run on them with a grid of settings. The form's starting values
+(open above MAR 0.6 for 1 s) gave almost no false yawns but detected an event in only 78 % of the yawning videos;
+using an open threshold of 0.4 together with a peak of 0.5 raised this to 92 % (94 of 102 videos, counted as videos with
+at least one detected yawn, which is an upper bound for recall because not every yawning video is guaranteed to
+contain a clear yawn) while keeping false yawns low. The one talking video with more than one false yawn
+(`17-FemaleSunGlasses-Talking`, 3 detections of 1.0-1.2 s) is a sunglasses video. **Limitation:** the settings
+were tuned on the same videos they are evaluated on (there is no separate hold-out set), so the false-yawn numbers
+are optimistic.
 
 Run the unit tests with:
 
@@ -93,13 +126,14 @@ Run the unit tests with:
 
 - `drowsiness/landmarks.py`: Face Landmarker wrapper (478 points), eye and mouth point indices
 - `drowsiness/source.py`: frame reading from a camera or a video file
-- `drowsiness/drawing.py`: normal and privacy-mode drawing, EAR graph, warning banner
+- `drowsiness/drawing.py`: normal and privacy-mode drawing, EAR/MAR graphs, warning banners
 - `drowsiness/eye.py`: EAR computation, calibration, blink and long-closure tracker
-- `drowsiness/eye_evaluation.py`: matching detections with manual labels
+- `drowsiness/mouth.py`: MAR computation and yawn tracker
+- `drowsiness/eye_evaluation.py`, `drowsiness/mouth_evaluation.py`: matching detections with manual labels
 - `drowsiness/consent.py`: per-video image sharing permission (see below)
 - `app.py`: live window, `measure_detection.py`: batch measurement
-- `tools/`: labeling, evaluation, controlled test, results page, permission list builder
-- `tests/`: unit tests (synthetic EAR sequences)
+- `tools/`: labeling, evaluation, controlled test, test video picker, results page, permission list builder
+- `tests/`: unit tests (synthetic EAR and MAR sequences)
 
 ## Data and privacy
 
@@ -120,5 +154,5 @@ not inspected.
 
 ## Roadmap
 
-WP3 yawning (mouth aspect ratio), WP4 head pose + PERCLOS + decision logic + audible alarm,
-WP5 performance evaluation, WP6 user interface, WP7 software testing, WP8 documentation.
+WP4 head pose + PERCLOS + decision logic + audible alarm, WP5 performance evaluation, WP6 user interface,
+WP7 software testing, WP8 documentation.

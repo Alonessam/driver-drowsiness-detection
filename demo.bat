@@ -4,7 +4,9 @@ cd /d "%~dp0"
 title Driver Drowsiness Detection - Demo
 set "PY=%~dp0.venv\Scripts\python.exe"
 if not defined YAWDD_DIR set "YAWDD_DIR=%~dp0data\YawDD"
+if not exist "%YAWDD_DIR%" if exist "%~dp0..\YawDD dataset" set "YAWDD_DIR=%~dp0..\YawDD dataset"
 if not defined UTA_DIR set "UTA_DIR=%~dp0data\UTA-RLDD"
+if not exist "%UTA_DIR%" if exist "%~dp0..\kaggle" set "UTA_DIR=%~dp0..\kaggle"
 set "YAWDD=%YAWDD_DIR%\Mirror\Female_mirror"
 set "LOG=%~dp0app_log.txt"
 

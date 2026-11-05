@@ -32,17 +32,17 @@ def match_events(label_times_s, events, tolerance_s=0.25):
     return tp, len(label_times_s) - tp, len(events) - tp
 
 
-def read_labels(json_path):
-    """Reads (video path, blink times in s) from a label file."""
+def read_labels(json_path, key="blink_times_s"):
+    """Reads (video path, event times in s) from a label file (blinks by default, "yawn_times_s" for yawns)."""
     with open(json_path, encoding="utf-8") as f:
         data = json.load(f)
-    return data["video"], sorted(float(t) for t in data["blink_times_s"])
+    return data["video"], sorted(float(t) for t in data[key])
 
 
-def write_labels(json_path, video_path, times_s):
-    """Saves manually marked blink times together with the video they belong to."""
+def write_labels(json_path, video_path, times_s, key="blink_times_s"):
+    """Saves manually marked event times together with the video they belong to."""
     Path(json_path).parent.mkdir(parents=True, exist_ok=True)
-    data = {"video": str(video_path).replace("\\", "/"), "blink_times_s": [round(t, 3) for t in sorted(times_s)]}
+    data = {"video": str(video_path).replace("\\", "/"), key: [round(t, 3) for t in sorted(times_s)]}
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=1)
 
