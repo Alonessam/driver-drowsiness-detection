@@ -1,5 +1,7 @@
 """Comparing blink detection with manual labels (success criterion of work package 2)."""
 import json
+import shutil
+from datetime import datetime
 from pathlib import Path
 
 from .eye import BLINK, LONG_BLINK, EyeTracker, mean_ear
@@ -45,6 +47,21 @@ def write_labels(json_path, video_path, times_s, key="blink_times_s"):
     data = {"video": str(video_path).replace("\\", "/"), key: [round(t, 3) for t in sorted(times_s)]}
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=1)
+
+
+def archive_labels(json_path):
+    """Moves an existing label file to a `previous` folder next to it (nothing is deleted); returns the new path.
+
+    Used to label a video again from scratch while keeping the first labeling, e.g. to compare two rounds.
+    """
+    json_path = Path(json_path)
+    if not json_path.exists():
+        return None
+    target_dir = json_path.parent / "previous"
+    target_dir.mkdir(exist_ok=True)
+    target = target_dir / f"{json_path.stem}-{datetime.now():%Y%m%d-%H%M%S}.json"
+    shutil.move(str(json_path), str(target))
+    return target
 
 
 def video_eye_events(video_path, max_s=None, tracker=None):

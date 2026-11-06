@@ -23,17 +23,20 @@ echo ==========================================================
 echo   BLINK TESTS (WORK PACKAGE 2)
 echo ==========================================================
 echo.
-echo   1  Label the test videos (5 videos, slow motion)
+echo   1  Label the test videos (5 videos, slow motion; labeled ones are skipped)
 echo   2  Show label status
 echo   3  Evaluate blink detection (target: 85 percent or more)
-echo   4  Controlled long eye closure test (camera, privacy mode)
+echo   4  Controlled long eye closure test (camera, privacy mode, 10 trials)
+echo   5  Label ALL videos again from scratch (old labels are kept)
+echo   6  Compare the two labeling rounds (how consistent are the labels?)
 echo   Q  Quit
 echo.
 echo   Labeling: press B at every blink, press Q when done.
-echo   Controlled test: close your eyes on the command, open them on OPEN. No image is saved.
+echo   Controlled test: close your eyes at the HIGH beep and keep them closed until the LOW beep.
+echo   No image is saved.
 echo.
-choice /c 1234Q /n /m "Choice: "
-if errorlevel 5 goto done
+choice /c 123456Q /n /m "Choice: "
+if errorlevel 7 goto done
 set "CHOICE_NO=%errorlevel%"
 
 :run
@@ -42,6 +45,8 @@ if "%CHOICE_NO%"=="1" set "COMMAND=tools\test_videos.py label"
 if "%CHOICE_NO%"=="2" set "COMMAND=tools\test_videos.py status"
 if "%CHOICE_NO%"=="3" set "COMMAND=tools\evaluate_blinks.py"
 if "%CHOICE_NO%"=="4" set "COMMAND=tools\controlled_test.py"
+if "%CHOICE_NO%"=="5" set "COMMAND=tools\test_videos.py label --fresh"
+if "%CHOICE_NO%"=="6" set "COMMAND=tools\compare_labels.py"
 
 if not defined COMMAND (
     echo Invalid choice: %CHOICE_NO%

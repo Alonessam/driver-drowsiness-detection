@@ -4,6 +4,7 @@ Usage:
     python tools/test_videos.py label                  # blink test videos (work package 2), unlabeled ones one by one
     python tools/test_videos.py label --kind yawn      # yawn test videos (work package 3)
     python tools/test_videos.py label --all            # also reopens labeled ones (continues the previous marks)
+    python tools/test_videos.py label --fresh          # label ALL videos again from scratch (old labels are kept)
     python tools/test_videos.py status [--kind yawn]   # which video has how many events labeled
 """
 import argparse
@@ -50,6 +51,7 @@ def main():
     ap.add_argument("command", choices=["label", "status"])
     ap.add_argument("--kind", choices=KINDS, default="blink")
     ap.add_argument("--all", action="store_true")
+    ap.add_argument("--fresh", action="store_true", help="label every video again from scratch; old labels are kept in 'previous'")
     args = ap.parse_args()
     kind = KINDS[args.kind]
 
@@ -57,12 +59,13 @@ def main():
         print_status(kind)
         return
     for i, v in enumerate(videos(kind), 1):
-        if label_path(kind, v).exists() and not args.all:
+        if label_path(kind, v).exists() and not args.all and not args.fresh:
             print(f"{i}. {v.name}: already labeled, skipped")
             continue
         print(f"\n{i}/{len(videos(kind))}  {v.name}")
         print(f"{kind['hint']} Press Q when done to save and open the next video.")
-        subprocess.run([sys.executable, str(LABELER), str(v), "--kind", args.kind], check=False)
+        command = [sys.executable, str(LABELER), str(v), "--kind", args.kind] + (["--fresh"] if args.fresh else [])
+        subprocess.run(command, check=False)
     print("\nDone.")
     print_status(kind)
 

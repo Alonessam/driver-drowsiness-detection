@@ -1,7 +1,7 @@
 """Manual event labeling tool: blinks (work package 2) or yawns (work package 3).
 
 Usage:
-    python tools/label_events.py <video> [--kind blink|yawn] [--speed 0.25] [--output labels/name.json]
+    python tools/label_events.py <video> [--kind blink|yawn] [--speed 0.25] [--output labels/name.json] [--fresh]
 
 Blinks: the video plays in slow motion (0.25x); press B at every blink.
 Yawns : the video plays at real speed; press B once while the mouth is wide open in every yawn
@@ -20,7 +20,7 @@ from pathlib import Path
 import cv2
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from drowsiness.eye_evaluation import read_labels, write_labels  # noqa: E402
+from drowsiness.eye_evaluation import archive_labels, read_labels, write_labels  # noqa: E402
 from drowsiness.paths import ROOT, storable_video  # noqa: E402
 
 KINDS = {
@@ -41,6 +41,8 @@ def main():
     ap.add_argument("--speed", type=float, default=None,
                     help="playback speed (1 = real time; default 0.25 for blinks, 1 for yawns)")
     ap.add_argument("--output", type=Path, default=None)
+    ap.add_argument("--fresh", action="store_true",
+                    help="start again from scratch; the old label file is kept in a 'previous' folder")
     ap.add_argument("--zoom", type=float, default=1.5, help="enlarge small videos by this factor (default 1.5)")
     args = ap.parse_args()
 
@@ -48,6 +50,8 @@ def main():
     window = f"{kind['noun'].capitalize()} labeling"
     output = args.output or ROOT / kind["folder"] / f"{args.video.stem}.json"
     marks = []
+    if args.fresh and output.exists():
+        print(f"Old labels kept in: {archive_labels(output)}")
     if output.exists():  # continue a previous session
         _, marks = read_labels(output, kind["key"])
         print(f"Previous labels loaded: {len(marks)} {kind['noun']}s ({output.name})")

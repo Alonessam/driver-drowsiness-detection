@@ -7,3 +7,4 @@ models/*.task
 app_log.txt
 *.err
 results.html
+labels/**/previous/

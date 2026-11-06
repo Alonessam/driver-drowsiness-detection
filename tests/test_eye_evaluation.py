@@ -43,3 +43,15 @@ def test_label_file_round_trip(tmp_path):
     video, times = read_labels(path)
     assert video == "videos/sample video.avi"
     assert times == [2.25, 5.0, 8.5]
+
+
+def test_archive_labels_keeps_the_old_file_and_clears_the_original(tmp_path):
+    from drowsiness.eye_evaluation import archive_labels
+
+    path = tmp_path / "labels" / "video.json"
+    write_labels(path, "v.avi", [1.0, 2.0])
+    archived = archive_labels(path)
+    assert not path.exists()
+    assert archived.parent.name == "previous" and archived.exists()
+    assert read_labels(archived)[1] == [1.0, 2.0]
+    assert archive_labels(path) is None      # nothing to archive any more

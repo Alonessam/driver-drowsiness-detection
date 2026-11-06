@@ -76,8 +76,12 @@ Blink detection (WP2 targets: >= 85 % of manually counted blinks, >= 90 % of pla
 ```powershell
 .\.venv\Scripts\python.exe tools\test_videos.py label    # label the videos listed in labels\test_videos.txt
 .\.venv\Scripts\python.exe tools\evaluate_blinks.py      # compare detection with the labels (tolerance 0.25 s)
-.\.venv\Scripts\python.exe tools\controlled_test.py      # live test: planned eye closures > 1.5 s
+.\.venv\Scripts\python.exe tools\controlled_test.py      # live test: close eyes at the high beep, keep them closed until the low beep (3.5 s)
 ```
+
+To label a video set again from scratch (the first labels are kept in a `previous` folder) use
+`tools\test_videos.py label --fresh` (add `--kind yawn` for yawns); `tools\compare_labels.py` then shows how well
+the two labeling rounds agree.
 
 Yawn detection (WP3 targets: >= 85 % of manually counted yawns in 5 test videos, at most 1 false yawn per talking
 video), using `yawn_tests.bat` or directly:
@@ -130,9 +134,10 @@ Run the unit tests with:
 - `drowsiness/eye.py`: EAR computation, calibration, blink and long-closure tracker
 - `drowsiness/mouth.py`: MAR computation and yawn tracker
 - `drowsiness/eye_evaluation.py`, `drowsiness/mouth_evaluation.py`: matching detections with manual labels
+- `drowsiness/controlled.py`: flow of the controlled long-closure test (commands, trials, diagnostics)
 - `drowsiness/consent.py`: per-video image sharing permission (see below)
 - `app.py`: live window, `measure_detection.py`: batch measurement
-- `tools/`: labeling, evaluation, controlled test, test video picker, results page, permission list builder
+- `tools/`: labeling, label comparison, evaluation, controlled test, test video picker, results page, permission list builder
 - `tests/`: unit tests (synthetic EAR and MAR sequences)
 
 ## Data and privacy
