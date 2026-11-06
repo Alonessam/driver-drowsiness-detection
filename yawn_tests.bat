@@ -30,10 +30,11 @@ echo   4  Evaluate: labeled yawns (target 85 percent) and talking videos
 echo   5  Evaluate only the talking videos (false yawns, target at most 1 per video)
 echo   6  Label the yawn videos again from scratch (old labels are kept)
 echo   7  Compare the two labeling rounds (how consistent are the labels?)
+echo   8  Label ONE video (pick from the list; redo or continue it)
 echo   Q  Quit
 echo.
-choice /c 1234567Q /n /m "Choice: "
-if errorlevel 8 goto done
+choice /c 12345678Q /n /m "Choice: "
+if errorlevel 9 goto done
 set "CHOICE_NO=%errorlevel%"
 
 :run
@@ -45,6 +46,7 @@ if "%CHOICE_NO%"=="4" set "COMMAND=tools\evaluate_yawns.py"
 if "%CHOICE_NO%"=="5" set "COMMAND=tools\evaluate_yawns.py --skip-labels"
 if "%CHOICE_NO%"=="6" set "COMMAND=tools\test_videos.py label --kind yawn --fresh"
 if "%CHOICE_NO%"=="7" set "COMMAND=tools\compare_labels.py --kind yawn"
+if "%CHOICE_NO%"=="8" set "COMMAND=tools\test_videos.py one --kind yawn"
 
 if not defined COMMAND (
     echo Invalid choice: %CHOICE_NO%

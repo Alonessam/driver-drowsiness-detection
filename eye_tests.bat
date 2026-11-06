@@ -29,14 +29,15 @@ echo   3  Evaluate blink detection (target: 85 percent or more)
 echo   4  Controlled long eye closure test (camera, privacy mode, 10 trials)
 echo   5  Label ALL videos again from scratch (old labels are kept)
 echo   6  Compare the two labeling rounds (how consistent are the labels?)
+echo   7  Label ONE video (pick from the list; redo or continue it)
 echo   Q  Quit
 echo.
 echo   Labeling: press B at every blink, press Q when done.
 echo   Controlled test: close your eyes at the HIGH beep and keep them closed until the LOW beep.
 echo   No image is saved.
 echo.
-choice /c 123456Q /n /m "Choice: "
-if errorlevel 7 goto done
+choice /c 1234567Q /n /m "Choice: "
+if errorlevel 8 goto done
 set "CHOICE_NO=%errorlevel%"
 
 :run
@@ -47,6 +48,7 @@ if "%CHOICE_NO%"=="3" set "COMMAND=tools\evaluate_blinks.py"
 if "%CHOICE_NO%"=="4" set "COMMAND=tools\controlled_test.py"
 if "%CHOICE_NO%"=="5" set "COMMAND=tools\test_videos.py label --fresh"
 if "%CHOICE_NO%"=="6" set "COMMAND=tools\compare_labels.py"
+if "%CHOICE_NO%"=="7" set "COMMAND=tools\test_videos.py one"
 
 if not defined COMMAND (
     echo Invalid choice: %CHOICE_NO%

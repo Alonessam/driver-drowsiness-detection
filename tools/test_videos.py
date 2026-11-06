@@ -5,6 +5,7 @@ Usage:
     python tools/test_videos.py label --kind yawn      # yawn test videos (work package 3)
     python tools/test_videos.py label --all            # also reopens labeled ones (continues the previous marks)
     python tools/test_videos.py label --fresh          # label ALL videos again from scratch (old labels are kept)
+    python tools/test_videos.py one [--kind yawn]      # pick ONE video from the list and (re)label it
     python tools/test_videos.py status [--kind yawn]   # which video has how many events labeled
 """
 import argparse
@@ -46,9 +47,32 @@ def print_status(kind):
     print(f"\nLabeled videos: {done}/{len(videos(kind))}")
 
 
+def label_one(kind_name, kind):
+    """Lists the test videos, lets the user pick one and label it (continue the old marks or start again)."""
+    vids = videos(kind)
+    for i, v in enumerate(vids, 1):
+        path = label_path(kind, v)
+        info = f"{len(read_labels(path, kind['key'])[1])} {kind['noun']}s marked" if path.exists() else "not labeled yet"
+        print(f"  {i}. {v.name}  ({info})")
+    choice = input(f"\nVideo number (1-{len(vids)}, Enter = cancel): ").strip()
+    if not choice.isdigit() or not 1 <= int(choice) <= len(vids):
+        print("Cancelled.")
+        return
+    video = vids[int(choice) - 1]
+    fresh = False
+    if label_path(kind, video).exists():
+        answer = input("Existing labels found. [C]ontinue editing them or [R]edo from scratch "
+                       "(old labels are kept)? [C/R]: ").strip().lower()
+        fresh = answer.startswith("r")
+    print(f"\n{video.name}\n{kind['hint']} Press Q when done to save.")
+    command = [sys.executable, str(LABELER), str(video), "--kind", kind_name] + (["--fresh"] if fresh else [])
+    subprocess.run(command, check=False)
+    print_status(kind)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    ap.add_argument("command", choices=["label", "status"])
+    ap.add_argument("command", choices=["label", "status", "one"])
     ap.add_argument("--kind", choices=KINDS, default="blink")
     ap.add_argument("--all", action="store_true")
     ap.add_argument("--fresh", action="store_true", help="label every video again from scratch; old labels are kept in 'previous'")
@@ -57,6 +81,9 @@ def main():
 
     if args.command == "status":
         print_status(kind)
+        return
+    if args.command == "one":
+        label_one(args.kind, kind)
         return
     for i, v in enumerate(videos(kind), 1):
         if label_path(kind, v).exists() and not args.all and not args.fresh:

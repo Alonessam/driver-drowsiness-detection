@@ -81,7 +81,8 @@ Blink detection (WP2 targets: >= 85 % of manually counted blinks, >= 90 % of pla
 
 To label a video set again from scratch (the first labels are kept in a `previous` folder) use
 `tools\test_videos.py label --fresh` (add `--kind yawn` for yawns); `tools\compare_labels.py` then shows how well
-the two labeling rounds agree.
+the two labeling rounds agree. `tools\test_videos.py one` (add `--kind yawn`) lets you pick a single video from the
+list and either continue or redo its labels.
 
 Yawn detection (WP3 targets: >= 85 % of manually counted yawns in 5 test videos, at most 1 false yawn per talking
 video), using `yawn_tests.bat` or directly:
