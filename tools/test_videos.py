@@ -47,6 +47,16 @@ def print_status(kind):
     print(f"\nLabeled videos: {done}/{len(videos(kind))}")
 
 
+def ask(prompt):
+    """input() that shows the prompt on standard output.
+
+    The batch menus redirect standard error to a log file, and input() writes its prompt there when it is
+    redirected, which would hide the question from the user.
+    """
+    print(prompt, end="", flush=True)
+    return input()
+
+
 def label_one(kind_name, kind):
     """Lists the test videos, lets the user pick one and label it (continue the old marks or start again)."""
     vids = videos(kind)
@@ -54,15 +64,15 @@ def label_one(kind_name, kind):
         path = label_path(kind, v)
         info = f"{len(read_labels(path, kind['key'])[1])} {kind['noun']}s marked" if path.exists() else "not labeled yet"
         print(f"  {i}. {v.name}  ({info})")
-    choice = input(f"\nVideo number (1-{len(vids)}, Enter = cancel): ").strip()
+    choice = ask(f"\nVideo number (1-{len(vids)}, Enter = cancel): ").strip()
     if not choice.isdigit() or not 1 <= int(choice) <= len(vids):
         print("Cancelled.")
         return
     video = vids[int(choice) - 1]
     fresh = False
     if label_path(kind, video).exists():
-        answer = input("Existing labels found. [C]ontinue editing them or [R]edo from scratch "
-                       "(old labels are kept)? [C/R]: ").strip().lower()
+        answer = ask("Existing labels found. [C]ontinue editing them or [R]edo from scratch "
+                     "(old labels are kept)? [C/R]: ").strip().lower()
         fresh = answer.startswith("r")
     print(f"\n{video.name}\n{kind['hint']} Press Q when done to save.")
     command = [sys.executable, str(LABELER), str(video), "--kind", kind_name] + (["--fresh"] if fresh else [])
